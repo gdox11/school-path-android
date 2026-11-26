@@ -1,0 +1,158 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create Android project files
+        run: |
+          mkdir -p app/src/main/java/com/schoolpath/app
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = 'SchoolPath'
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.schoolpath.app'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.schoolpath.app'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:label="School Path"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
+                  android:supportsRtl="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/schoolpath/app/MainActivity.java <<'EOF'
+          package com.schoolpath.app;
+
+          import android.app.Activity;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.Gravity;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  LinearLayout layout = new LinearLayout(this);
+                  layout.setOrientation(LinearLayout.VERTICAL);
+                  layout.setGravity(Gravity.CENTER);
+                  int padding = (int) (24 * getResources()
+                          .getDisplayMetrics().density);
+                  layout.setPadding(padding, padding, padding, padding);
+
+                  TextView title = new TextView(this);
+                  title.setText("School Path");
+                  title.setTextSize(28);
+                  title.setGravity(Gravity.CENTER);
+
+                  TextView details = new TextView(this);
+                  details.setText(
+                          "پروژه با موفقیت اجرا شد.\\n\\n"
+                                  + "مدل این دستگاه: " + Build.MODEL + "\\n"
+                                  + "نسخهٔ اندروید: "
+                                  + Build.VERSION.RELEASE + "\\n\\n"
+                                  + "این نسخه فقط اطلاعات همین دستگاه را "
+                                  + "نشان می‌دهد. برای مدیریت دستگاه دیگری، "
+                                  + "باید روی آن دستگاه هم برنامه نصب شود."
+                  );
+                  details.setTextSize(16);
+                  details.setGravity(Gravity.CENTER);
+                  details.setPadding(0, padding, 0, 0);
+
+                  layout.addView(title);
+                  layout.addView(details);
+                  setContentView(layout);
+              }
+          }
+          EOF
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: school-path-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
